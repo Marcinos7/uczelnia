@@ -691,18 +691,18 @@
          *   }
          * }
          */
- const firebaseConfig = {
-    apiKey: "AIzaSyAz3aaLa6zDD69krNP6RjZNMyBMyjbxK0k",
-    authDomain: "uczelnia-ad6e3.firebaseapp.com",
-    projectId: "uczelnia-ad6e3",
-    storageBucket: "uczelnia-ad6e3.firebasestorage.app",
-    messagingSenderId: "1033930709105",
-    appId: "1:1033930709105:web:8b5f420d37121cc6a723d0",
-    measurementId: "G-95KMYN535N"
-  };
+        const defaultFirebaseConfig = {
+            apiKey: "AIzaSyAz3aaLa6zDD69krNP6RjZNMyBMyjbxK0k",
+            authDomain: "uczelnia-ad6e3.firebaseapp.com",
+            projectId: "uczelnia-ad6e3",
+            storageBucket: "uczelnia-ad6e3.firebasestorage.app",
+            messagingSenderId: "1033930709105",
+            appId: "1:1033930709105:web:8b5f420d37121cc6a723d0",
+            measurementId: "G-95KMYN535N"
+        };
 
-        // Automatyczne wykrycie konfiguracji środowiskowej lub użycie własnej powyżej
-        let firebaseConfig = CUSTOM_FIREBASE_CONFIG;
+        // Automatyczne wykrycie konfiguracji środowiskowej lub użycie domyślnej konfiguracji powyżej
+        let firebaseConfig = { ...defaultFirebaseConfig };
         let usingEnvConfig = false;
 
         if (typeof __firebase_config !== 'undefined' && __firebase_config) {
@@ -710,7 +710,7 @@
                 firebaseConfig = JSON.parse(__firebase_config);
                 usingEnvConfig = true;
             } catch (e) {
-                console.warn("Błąd parsowania __firebase_config, używam CUSTOM_FIREBASE_CONFIG");
+                console.warn("Błąd parsowania __firebase_config, używam domyślnej konfiguracji Firebase");
             }
         }
 
