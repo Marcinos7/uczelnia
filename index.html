@@ -1,0 +1,2211 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USOS-Lite | Akademicki Dziennik Elektroniczny</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons (czytelne, akademickie ikony) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    colors: {
+                        academic: {
+                            50: '#f0f4f8',
+                            100: '#d9e2ec',
+                            200: '#bcccdc',
+                            300: '#9fb3c8',
+                            400: '#829ab1',
+                            500: '#627d98',
+                            600: '#486581',
+                            700: '#334e68',
+                            800: '#243b53',
+                            900: '#102a43',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Czyste style akademickie, poprawa przewijania tabeli i sticky columns */
+        body {
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        /* Ukrycie strzałek w polu number dla czystszego wyglądu */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        .sticky-col-left {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+        }
+        .sticky-col-right {
+            position: sticky;
+            right: 0;
+            z-index: 10;
+        }
+        /* Płynne przewijanie */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+    <!-- POWIADOMIENIA TOAST (Zamiast alert()) -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- MODAL POTWIERDZENIA (Zamiast confirm()) -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 animate-fade-in">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                    <i class="ph ph-warning-circle text-xl"></i>
+                </div>
+                <div>
+                    <h3 id="confirm-title" class="text-lg font-semibold text-slate-900">Potwierdzenie operacji</h3>
+                    <p id="confirm-message" class="text-sm text-slate-600 mt-1">Czy na pewno chcesz wykonać tę akcję?</p>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="confirm-cancel-btn" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition">Anuluj</button>
+                <button id="confirm-ok-btn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-xs">Potwierdź</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DODAWANIA / EDYCJI KOLUMNY OCENY -->
+    <div id="column-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 id="column-modal-title" class="text-lg font-semibold text-slate-900">Nowa kolumna oceny</h3>
+                <button type="button" onclick="closeColumnModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="ph ph-x text-xl"></i>
+                </button>
+            </div>
+            <form id="column-form" class="mt-4 space-y-4">
+                <input type="hidden" id="col-edit-id">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Forma zaliczenia / Za co jest ocena *</label>
+                    <select id="col-type" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 bg-white">
+                        <option value="Kolokwium">Kolokwium</option>
+                        <option value="Odpowiedź ustna">Odpowiedź ustna</option>
+                        <option value="Praca samodzielna">Praca samodzielna</option>
+                        <option value="Praca grupowa">Praca grupowa</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Waga oceny (1 - 5) *</label>
+                    <select id="col-weight" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 bg-white">
+                        <option value="1">1 — Niska (np. krótka aktywność)</option>
+                        <option value="2">2 — Standardowa</option>
+                        <option value="3" selected>3 — Podwyższona (np. kolokwium cząstkowe)</option>
+                        <option value="4">4 — Wysoka (np. duży projekt)</option>
+                        <option value="5">5 — Krytyczna (np. kolokwium zaliczeniowe)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Krótki opis / Data (opcjonalnie)</label>
+                    <input type="text" id="col-desc" maxlength="40" placeholder="np. Termin I, Temat: Bazy danych" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600">
+                </div>
+                <div class="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                    <button type="button" onclick="closeColumnModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition">Anuluj</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition shadow-xs">Zapisz kolumnę</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL EDYCJI ENCJI ADMINISTRACYJNYCH (Student / Wydział / Przedmiot / Użytkownik) -->
+    <div id="admin-edit-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 id="admin-modal-title" class="text-lg font-semibold text-slate-900">Edycja rekordu</h3>
+                <button type="button" onclick="closeAdminModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="ph ph-x text-xl"></i>
+                </button>
+            </div>
+            <div id="admin-modal-body" class="mt-4"></div>
+        </div>
+    </div>
+
+    <!-- EKRAN ŁADOWANIA -->
+    <div id="loading-screen" class="fixed inset-0 bg-white z-40 flex flex-col items-center justify-center">
+        <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-700 rounded-full animate-spin"></div>
+        <p class="mt-3 text-sm font-medium text-slate-600">Inicjalizacja systemu akademickiego...</p>
+    </div>
+
+    <!-- EKRAN LOGOWANIA / PIERWSZEGO URUCHOMIENIA -->
+    <div id="auth-view" class="hidden min-h-screen flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 bg-slate-50">
+        <div class="sm:mx-auto sm:w-full sm:max-w-md text-center">
+            <div class="mx-auto w-12 h-12 bg-indigo-900 text-white rounded-xl flex items-center justify-center shadow-sm">
+                <i class="ph ph-graduation-cap text-2xl"></i>
+            </div>
+            <h1 class="mt-4 text-2xl font-bold tracking-tight text-slate-900">Akademicki Dziennik Elektroniczny</h1>
+            <p class="mt-1 text-sm text-slate-500">System ewidencji wyników i zaliczeń studentów</p>
+        </div>
+
+        <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+            <div class="bg-white py-8 px-6 shadow-sm border border-slate-200 rounded-xl sm:px-8">
+                <!-- Przełącznik Logowanie / Rejestracja pierwszego administratora -->
+                <div class="flex rounded-lg bg-slate-100 p-1 mb-6">
+                    <button type="button" id="tab-login-btn" onclick="switchAuthMode('login')" class="flex-1 py-1.5 text-sm font-medium rounded-md bg-white text-slate-900 shadow-2xs transition">Logowanie</button>
+                    <button type="button" id="tab-register-btn" onclick="switchAuthMode('register')" class="flex-1 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 transition">Pierwszy Administrator</button>
+                </div>
+
+                <!-- Formularz Logowania -->
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label for="login-email" class="block text-sm font-medium text-slate-700">Adres e-mail (uczelnia)</label>
+                        <input id="login-email" type="email" required placeholder="jan.kowalski@uczelnia.edu.pl" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600">
+                    </div>
+                    <div>
+                        <label for="login-password" class="block text-sm font-medium text-slate-700">Hasło</label>
+                        <input id="login-password" type="password" required placeholder="••••••••" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600">
+                    </div>
+                    <button type="submit" id="login-submit-btn" class="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-lg shadow-xs text-sm font-medium text-white bg-indigo-800 hover:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 transition">
+                        <i class="ph ph-sign-in text-lg"></i>
+                        <span>Zaloguj się do systemu</span>
+                    </button>
+                </form>
+
+                <!-- Formularz Rejestracji Pierwszego Administratora -->
+                <form id="register-admin-form" class="space-y-4 hidden">
+                    <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs text-indigo-900 leading-relaxed">
+                        <strong>Inicjalizacja systemu:</strong> Utwórz główne konto Administratora (Dziekanatu). Administrator może tworzyć konta wykładowców, wydziały, przedmioty oraz samemu prowadzić zajęcia.
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700">Tytuł naukowy</label>
+                            <input id="reg-title" type="text" placeholder="dr hab." value="mgr" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-medium text-slate-700">Imię i nazwisko *</label>
+                            <input id="reg-name" type="text" required placeholder="Anna Nowak" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700">Adres e-mail *</label>
+                        <input id="reg-email" type="email" required placeholder="admin@uczelnia.edu.pl" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700">Hasło (min. 6 znaków) *</label>
+                        <input id="reg-password" type="password" required minlength="6" placeholder="••••••••" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer pt-1">
+                        <input id="reg-is-lecturer" type="checkbox" checked class="rounded border-slate-300 text-indigo-700 focus:ring-indigo-600">
+                        <span>Administrator pełni również funkcję Wykładowcy</span>
+                    </label>
+                    <button type="submit" id="reg-submit-btn" class="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-lg shadow-xs text-sm font-medium text-white bg-indigo-800 hover:bg-indigo-900 transition">
+                        <i class="ph ph-user-plus text-lg"></i>
+                        <span>Utwórz konto Administratora</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Informacja o konfiguracji Firebase (widoczna szczególnie gdy brak własnego klucza) -->
+            <div id="firebase-config-notice" class="mt-4 bg-white border border-slate-200 rounded-xl p-4 text-xs text-slate-600 shadow-2xs">
+                <div class="flex items-center justify-between cursor-pointer" onclick="document.getElementById('config-details').classList.toggle('hidden')">
+                    <span class="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <i class="ph ph-gear text-indigo-600 text-base"></i>
+                        Status połączenia z Firebase / Instrukcja konfiguracji
+                    </span>
+                    <i class="ph ph-caret-down text-slate-400"></i>
+                </div>
+                <div id="config-details" class="hidden mt-3 pt-3 border-t border-slate-100 space-y-2 leading-relaxed">
+                    <p id="firebase-status-text" class="text-slate-700"></p>
+                    <p>Aby podłączyć własny projekt Firebase, otwórz plik HTML w edytorze i wklej swój obiekt <code>firebaseConfig</code> w sekcji oznaczonej komentarzem <strong>KONFIGURACJA FIREBASE</strong> na początku skryptu.</p>
+                    <p>W konsoli Firebase włącz: <strong>Authentication (Email/Hasło)</strong> oraz <strong>Cloud Firestore</strong>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GŁÓWNY INTERFEJS APLIKACJI (PO ZALOGOWANIU) -->
+    <div id="app-view" class="hidden flex-1 flex flex-col">
+        <!-- GÓRNY PASEK NAWIGACYJNY -->
+        <header class="bg-indigo-950 text-white shadow-sm sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-wrap items-center justify-between min-h-16 py-2 gap-3">
+                    <!-- Logo i nazwa -->
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 bg-indigo-800 border border-indigo-700 rounded-lg flex items-center justify-center">
+                            <i class="ph ph-graduation-cap text-xl text-indigo-200"></i>
+                        </div>
+                        <div>
+                            <span class="font-bold text-base tracking-tight block leading-none">Dziennik Akademicki</span>
+                            <span class="text-[11px] text-indigo-300 font-medium">System Ewidencji Ocen</span>
+                        </div>
+                    </div>
+
+                    <!-- Nawigacja Zakładek -->
+                    <nav class="flex items-center gap-1 bg-indigo-900/70 p-1 rounded-lg overflow-x-auto max-w-full">
+                        <button onclick="switchMainTab('gradebook')" id="nav-gradebook" class="nav-tab-btn px-3 py-1.5 rounded-md text-sm font-medium bg-white text-indigo-950 shadow-2xs flex items-center gap-1.5 whitespace-nowrap transition">
+                            <i class="ph ph-table"></i>
+                            <span>Dziennik Ocen</span>
+                        </button>
+                        <button onclick="switchMainTab('students')" id="nav-students" class="nav-tab-btn admin-only hidden px-3 py-1.5 rounded-md text-sm font-medium text-indigo-200 hover:text-white hover:bg-indigo-800/60 flex items-center gap-1.5 whitespace-nowrap transition">
+                            <i class="ph ph-student"></i>
+                            <span>Studenci</span>
+                        </button>
+                        <button onclick="switchMainTab('subjects')" id="nav-subjects" class="nav-tab-btn admin-only hidden px-3 py-1.5 rounded-md text-sm font-medium text-indigo-200 hover:text-white hover:bg-indigo-800/60 flex items-center gap-1.5 whitespace-nowrap transition">
+                            <i class="ph ph-books"></i>
+                            <span>Przedmioty i Wydziały</span>
+                        </button>
+                        <button onclick="switchMainTab('users')" id="nav-users" class="nav-tab-btn admin-only hidden px-3 py-1.5 rounded-md text-sm font-medium text-indigo-200 hover:text-white hover:bg-indigo-800/60 flex items-center gap-1.5 whitespace-nowrap transition">
+                            <i class="ph ph-users-three"></i>
+                            <span>Wykładowcy i Konta</span>
+                        </button>
+                    </nav>
+
+                    <!-- Informacja o użytkowniku i wylogowanie -->
+                    <div class="flex items-center gap-3 ml-auto sm:ml-0">
+                        <div class="text-right hidden sm:block">
+                            <div id="user-display-name" class="text-sm font-semibold text-white leading-tight">—</div>
+                            <div id="user-display-role" class="text-xs text-indigo-300 leading-tight mt-0.5">—</div>
+                        </div>
+                        <button onclick="handleLogout()" title="Wyloguj się" class="px-3 py-1.5 rounded-lg bg-indigo-900 hover:bg-red-600/90 border border-indigo-700 hover:border-red-500 text-xs font-medium text-indigo-100 hover:text-white flex items-center gap-1.5 transition">
+                            <i class="ph ph-sign-out text-base"></i>
+                            <span>Wyloguj</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- GŁÓWNA ZAWARTOŚĆ -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+            <!-- ========================================================= -->
+            <!-- ZAKŁADKA 1: DZIENNIK OCEN (GŁÓWNY WIDOK)                  -->
+            <!-- ========================================================= -->
+            <section id="tab-gradebook" class="space-y-5">
+                <!-- Pasek wyboru Wydziału i Przedmiotu -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-2xs p-4 sm:p-5">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        <!-- Wybór Wydziału -->
+                        <div class="md:col-span-4">
+                            <label for="select-faculty" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                                1. Wybierz Wydział
+                            </label>
+                            <select id="select-faculty" onchange="onFacultyChange()" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600">
+                                <option value="">-- Ładowanie wydziałów --</option>
+                            </select>
+                        </div>
+
+                        <!-- Wybór Przedmiotu -->
+                        <div class="md:col-span-5">
+                            <label for="select-subject" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                                2. Wybierz Przedmiot
+                            </label>
+                            <select id="select-subject" onchange="onSubjectChange()" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600">
+                                <option value="">-- Najpierw wybierz wydział --</option>
+                            </select>
+                        </div>
+
+                        <!-- Status uprawnień i synchronizacji -->
+                        <div class="md:col-span-3 flex flex-col sm:flex-row md:flex-col items-start sm:items-center md:items-end justify-between gap-2">
+                            <div id="permission-badge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600">
+                                <i class="ph ph-info"></i>
+                                <span>Wybierz przedmiot</span>
+                            </div>
+                            <div id="sync-status" class="text-xs text-slate-400 flex items-center gap-1">
+                                <i class="ph ph-cloud-check text-emerald-600 text-sm"></i>
+                                <span>Połączono z bazą</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Szczegóły wybranego przedmiotu + Przycisk dodawania kolumny oceny -->
+                    <div id="subject-toolbar" class="hidden mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                            <span class="flex items-center gap-1.5">
+                                <i class="ph ph-chalkboard-teacher text-indigo-700 text-base"></i>
+                                Prowadzący: <strong id="subject-lecturer-name" class="text-slate-900">—</strong>
+                            </span>
+                            <span class="hidden sm:inline text-slate-300">|</span>
+                            <span class="flex items-center gap-1.5">
+                                <i class="ph ph-check-circle text-emerald-600 text-base"></i>
+                                Próg zaliczenia: <strong class="text-slate-900">50.0%</strong>
+                            </span>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button id="add-grade-col-btn" onclick="openColumnModal()" class="hidden px-4 py-2 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-sm font-medium shadow-2xs flex items-center gap-1.5 transition">
+                                <i class="ph ph-plus-circle text-lg"></i>
+                                <span>Dodaj kolumnę oceny</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kontener Tabeli Ocen -->
+                <div id="gradebook-container" class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                    <!-- Stan pusty przed wyborem przedmiotu -->
+                    <div id="gradebook-empty-state" class="p-12 text-center">
+                        <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                            <i class="ph ph-table text-2xl"></i>
+                        </div>
+                        <h3 class="text-base font-semibold text-slate-900">Brak wybranego przedmiotu</h3>
+                        <p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">Wybierz wydział oraz przedmiot z listy powyżej, aby wyświetlić listę studentów, kolumny ocen oraz średnie ważone.</p>
+                    </div>
+
+                    <!-- Właściwa Tabela Ocen -->
+                    <div id="gradebook-table-wrapper" class="hidden overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr id="gradebook-thead-row" class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-600">
+                                    <!-- Dynamicznie generowane nagłówki -->
+                                </tr>
+                            </thead>
+                            <tbody id="gradebook-tbody" class="divide-y divide-slate-200 text-sm">
+                                <!-- Dynamicznie generowane wiersze studentów -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Legenda i wskazówki pod tabelą -->
+                <div class="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500 px-1">
+                    <div class="flex flex-wrap items-center gap-4">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Ocena &ge; 50% (Zaliczenie cząstkowe)</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> Ocena &lt; 50% (Niezaliczone)</span>
+                        <span class="flex items-center gap-1.5"><i class="ph ph-lock-simple text-slate-400 text-sm"></i> Tylko autor kolumny lub Administrator może edytować wpisy</span>
+                    </div>
+                    <div>
+                        Średnia ważona = &Sigma;(ocena &times; waga) / &Sigma;wag
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================= -->
+            <!-- ZAKŁADKA 2: STUDENCI (TYLKO ADMINISTRATOR)                -->
+            <!-- ========================================================= -->
+            <section id="tab-students" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Formularz dodawania studenta -->
+                    <div class="lg:col-span-4">
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-2xs p-5">
+                            <h2 class="text-base font-semibold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
+                                <i class="ph ph-user-plus text-indigo-700 text-lg"></i>
+                                <span>Dodaj nowego studenta</span>
+                            </h2>
+                            <form id="add-student-form" class="mt-4 space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Numer indeksu *</label>
+                                    <input type="text" id="stu-index" required placeholder="np. 148290" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Imię *</label>
+                                    <input type="text" id="stu-first-name" required placeholder="np. Jan" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Nazwisko *</label>
+                                    <input type="text" id="stu-last-name" required placeholder="np. Kowalski" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Wydział *</label>
+                                    <select id="stu-faculty" required class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                        <option value="">-- Wybierz wydział --</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="w-full py-2.5 px-4 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-sm font-medium shadow-2xs transition">
+                                    Dodaj studenta do bazy
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Lista studentów -->
+                    <div class="lg:col-span-8">
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                            <div class="p-4 sm:p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <h2 class="text-base font-semibold text-slate-900">Lista studentów</h2>
+                                    <p class="text-xs text-slate-500">Wszyscy studenci zarejestrowani na wydziałach</p>
+                                </div>
+                                <select id="filter-students-faculty" onchange="renderStudentsTable()" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-indigo-600 focus:outline-none">
+                                    <option value="ALL">Wszystkie wydziały</option>
+                                </select>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+                                            <th class="py-3 px-4 font-semibold">Nr indeksu</th>
+                                            <th class="py-3 px-4 font-semibold">Imię i nazwisko</th>
+                                            <th class="py-3 px-4 font-semibold">Wydział</th>
+                                            <th class="py-3 px-4 font-semibold text-right">Akcje</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="students-table-body" class="divide-y divide-slate-200 text-sm"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================= -->
+            <!-- ZAKŁADKA 3: PRZEDMIOTY I WYDZIAŁY (TYLKO ADMINISTRATOR)   -->
+            <!-- ========================================================= -->
+            <section id="tab-subjects" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Kolumna lewa: Wydziały -->
+                    <div class="lg:col-span-5 space-y-6">
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-2xs p-5">
+                            <h2 class="text-base font-semibold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
+                                <i class="ph ph-buildings text-indigo-700 text-lg"></i>
+                                <span>Dodaj Wydział</span>
+                            </h2>
+                            <form id="add-faculty-form" class="mt-4 space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Nazwa wydziału *</label>
+                                    <input type="text" id="fac-name" required placeholder="np. Wydział Informatyki i Telekomunikacji" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Skrót / Kod wydziału *</label>
+                                    <input type="text" id="fac-code" required placeholder="np. WIT" maxlength="12" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase focus:border-indigo-600 focus:outline-none">
+                                </div>
+                                <button type="submit" class="w-full py-2 px-4 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium transition">
+                                    Utwórz wydział
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                            <div class="p-4 border-b border-slate-100">
+                                <h3 class="text-sm font-semibold text-slate-900">Istniejące wydziały</h3>
+                            </div>
+                            <div id="faculties-list" class="divide-y divide-slate-100 text-sm"></div>
+                        </div>
+                    </div>
+
+                    <!-- Kolumna prawa: Przedmioty -->
+                    <div class="lg:col-span-7 space-y-6">
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-2xs p-5">
+                            <h2 class="text-base font-semibold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
+                                <i class="ph ph-book-open text-indigo-700 text-lg"></i>
+                                <span>Dodaj Przedmiot</span>
+                            </h2>
+                            <form id="add-subject-form" class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="sm:col-span-2">
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Nazwa przedmiotu *</label>
+                                    <input type="text" id="sub-name" required placeholder="np. Bazy Danych i Systemy Informacyjne" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Wydział *</label>
+                                    <select id="sub-faculty" required class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                        <option value="">-- Wybierz wydział --</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Prowadzący wykładowca *</label>
+                                    <select id="sub-lecturer" required class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                        <option value="">-- Wybierz wykładowcę --</option>
+                                    </select>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <button type="submit" class="w-full py-2.5 px-4 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-sm font-medium shadow-2xs transition">
+                                        Dodaj przedmiot i przypisz prowadzącego
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                            <div class="p-4 border-b border-slate-100">
+                                <h3 class="text-sm font-semibold text-slate-900">Lista przedmiotów na uczelni</h3>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+                                            <th class="py-3 px-4 font-semibold">Przedmiot</th>
+                                            <th class="py-3 px-4 font-semibold">Wydział</th>
+                                            <th class="py-3 px-4 font-semibold">Wykładowca</th>
+                                            <th class="py-3 px-4 font-semibold text-right">Akcje</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subjects-table-body" class="divide-y divide-slate-200 text-sm"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================= -->
+            <!-- ZAKŁADKA 4: WYKŁADOWCY I KONTA (TYLKO ADMINISTRATOR)      -->
+            <!-- ========================================================= -->
+            <section id="tab-users" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Formularz tworzenia konta wykładowcy / admina -->
+                    <div class="lg:col-span-5">
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-2xs p-5">
+                            <h2 class="text-base font-semibold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100">
+                                <i class="ph ph-user-circle-plus text-indigo-700 text-lg"></i>
+                                <span>Utwórz konto Wykładowcy / Admina</span>
+                            </h2>
+                            <p class="text-xs text-slate-500 mt-2">Utworzenie konta nie wyloguje Cię z Twojej obecnej sesji administratora.</p>
+                            
+                            <form id="create-user-form" class="mt-4 space-y-3.5">
+                                <div class="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Tytuł</label>
+                                        <input type="text" id="new-user-title" placeholder="dr inż." value="dr" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Imię i nazwisko *</label>
+                                        <input type="text" id="new-user-name" required placeholder="Piotr Wiśniewski" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Adres e-mail (login) *</label>
+                                    <input type="email" id="new-user-email" required placeholder="p.wisniewski@uczelnia.edu.pl" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Hasło startowe (min. 6 znaków) *</label>
+                                    <input type="password" id="new-user-password" required minlength="6" placeholder="••••••••" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Rola w systemie *</label>
+                                    <select id="new-user-role" onchange="toggleNewUserLecturerCheck()" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none">
+                                        <option value="lecturer">Wykładowca (wpisuje oceny w swoich przedmiotach)</option>
+                                        <option value="admin">Administrator (pełne uprawnienia)</option>
+                                    </select>
+                                </div>
+                                <div id="new-user-is-lecturer-wrap" class="hidden pt-1">
+                                    <label class="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                                        <input type="checkbox" id="new-user-is-lecturer" checked class="rounded border-slate-300 text-indigo-700">
+                                        <span>Ten administrator może być również przypisywany jako wykładowca</span>
+                                    </label>
+                                </div>
+                                <button type="submit" id="create-user-btn" class="w-full py-2.5 px-4 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-sm font-medium shadow-2xs transition">
+                                    Utwórz konto w Firebase
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Lista zarejestrowanych wykładowców i administratorów -->
+                    <div class="lg:col-span-7">
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                            <div class="p-4 sm:p-5 border-b border-slate-100">
+                                <h2 class="text-base font-semibold text-slate-900">Kadra akademicka i administratorzy</h2>
+                                <p class="text-xs text-slate-500">Zarządzaj rolami oraz uprawnieniami dydaktycznymi</p>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+                                            <th class="py-3 px-4 font-semibold">Użytkownik</th>
+                                            <th class="py-3 px-4 font-semibold">E-mail</th>
+                                            <th class="py-3 px-4 font-semibold">Rola / Status</th>
+                                            <th class="py-3 px-4 font-semibold text-right">Akcje</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-table-body" class="divide-y divide-slate-200 text-sm"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- LOGIKA APLIKACJI + INTEGRACJA FIREBASE AUTH & CLOUD FIRESTORE (v11)  -->
+    <!-- ===================================================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword, 
+            signOut, 
+            onAuthStateChanged,
+            signInWithCustomToken
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            setDoc, 
+            getDoc, 
+            addDoc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        /**
+         * =========================================================================
+         * 1. KONFIGURACJA FIREBASE (WKLEJ SWOJE DANE Z KONSOLI FIREBASE PONIŻEJ)
+         * =========================================================================
+         * Jeśli uruchamiasz plik lokalnie lub na własnym hostingu, zamień wartości
+         * w obiekcie `CUSTOM_FIREBASE_CONFIG` danymi ze swojego projektu Firebase:
+         * Project Settings -> General -> Your apps -> SDK setup and configuration.
+         * 
+         * Zalecane reguły bezpieczeństwa Cloud Firestore (w zakładce Firestore -> Rules):
+         * rules_version = '2';
+         * service cloud.firestore {
+         *   match /databases/{database}/documents {
+         *     match /artifacts/{appId}/public/data/{document=**} {
+         *       allow read: if request.auth != null;
+         *       allow write: if request.auth != null;
+         *     }
+         *   }
+         * }
+         */
+ const firebaseConfig = {
+    apiKey: "AIzaSyAz3aaLa6zDD69krNP6RjZNMyBMyjbxK0k",
+    authDomain: "uczelnia-ad6e3.firebaseapp.com",
+    projectId: "uczelnia-ad6e3",
+    storageBucket: "uczelnia-ad6e3.firebasestorage.app",
+    messagingSenderId: "1033930709105",
+    appId: "1:1033930709105:web:8b5f420d37121cc6a723d0",
+    measurementId: "G-95KMYN535N"
+  };
+
+        // Automatyczne wykrycie konfiguracji środowiskowej lub użycie własnej powyżej
+        let firebaseConfig = CUSTOM_FIREBASE_CONFIG;
+        let usingEnvConfig = false;
+
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            try {
+                firebaseConfig = JSON.parse(__firebase_config);
+                usingEnvConfig = true;
+            } catch (e) {
+                console.warn("Błąd parsowania __firebase_config, używam CUSTOM_FIREBASE_CONFIG");
+            }
+        }
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'academic-gradebook-v1';
+
+        // Sprawdzenie, czy skonfigurowano prawdziwe klucze
+        const isConfigured = firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey !== "TWOJ_API_KEY";
+
+        const statusTextEl = document.getElementById('firebase-status-text');
+        if (isConfigured) {
+            statusTextEl.innerHTML = `<span class="text-emerald-700 font-semibold">✓ Połączono z projektem Firebase:</span> <code>${firebaseConfig.projectId}</code>`;
+        } else {
+            statusTextEl.innerHTML = `<span class="text-amber-700 font-semibold">⚠ Wymagana konfiguracja kluczy Firebase:</span> W pliku HTML zastąp <code>TWOJ_API_KEY</code> swoimi danymi z konsoli Firebase, aby logowanie i baza działały.`;
+            document.getElementById('config-details').classList.remove('hidden');
+        }
+
+        // Inicjalizacja głównej oraz pomocniczej instancji Firebase
+        // Pomocnicza instancja ("Secondary") pozwala Administratorowi tworzyć konta wykładowców
+        // bez wylogowywania samego siebie z głównej sesji!
+        let app, secondaryApp, auth, secondaryAuth, db;
+        if (isConfigured) {
+            app = initializeApp(firebaseConfig);
+            secondaryApp = initializeApp(firebaseConfig, "Secondary");
+            auth = getAuth(app);
+            secondaryAuth = getAuth(secondaryApp);
+            db = getFirestore(app);
+        }
+
+        // Pomocnik do budowania ścieżek kolekcji zgodnie z architekturą wielodostępności
+        const getColRef = (collectionName) => collection(db, 'artifacts', appId, 'public', 'data', collectionName);
+        const getDocRef = (collectionName, docId) => doc(db, 'artifacts', appId, 'public', 'data', collectionName, docId);
+
+        // =========================================================================
+        // 2. STAN APLIKACJI (IN-MEMORY CACHE ZSYNCHRONIZOWANY Z FIRESTORE)
+        // =========================================================================
+        const state = {
+            currentUser: null,      // Obiekt Firebase Auth User
+            userProfile: null,      // Dokument z kolekcji 'users' { uid, email, name, title, role, isLecturer }
+            users: [],              // Wszyscy użytkownicy (wykładowcy / admini)
+            faculties: [],          // Wydziały { id, name, code }
+            students: [],           // Studenci { id, indexNumber, firstName, lastName, facultyId }
+            subjects: [],           // Przedmioty { id, name, facultyId, lecturerUid }
+            gradeColumns: [],       // Kolumny ocen dla wybranego przedmiotu { id, subjectId, type, weight, description, createdByUid, createdByName, createdAt }
+            grades: {},             // Mapa ocen: { [studentId]: { [columnId]: number } }
+            selectedFacultyId: '',
+            selectedSubjectId: '',
+            unsubscribers: []       // Subskrypcje onSnapshot do czyszczenia przy wylogowaniu
+        };
+
+        // =========================================================================
+        // 3. NARZĘDZIA UI (TOASTY, MODALE, POMOCNIKI)
+        // =========================================================================
+        window.showToast = (message, type = 'info') => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const styles = {
+                success: 'bg-emerald-900 text-white border-emerald-700',
+                error: 'bg-red-900 text-white border-red-700',
+                info: 'bg-slate-900 text-white border-slate-700',
+                warning: 'bg-amber-800 text-white border-amber-600'
+            };
+            const icons = {
+                success: 'ph-check-circle',
+                error: 'ph-x-circle',
+                info: 'ph-info',
+                warning: 'ph-warning'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${styles[type] || styles.info}`;
+            toast.innerHTML = `<i class="ph ${icons[type] || icons.info} text-lg shrink-0"></i><span>${escapeHtml(message)}</span>`;
+            
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        };
+
+        window.showConfirm = (title, message) => {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('confirm-modal');
+                document.getElementById('confirm-title').textContent = title;
+                document.getElementById('confirm-message').textContent = message;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+
+                const cleanup = (result) => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    okBtn.removeEventListener('click', onOk);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    resolve(result);
+                };
+
+                const onOk = () => cleanup(true);
+                const onCancel = () => cleanup(false);
+
+                const okBtn = document.getElementById('confirm-ok-btn');
+                const cancelBtn = document.getElementById('confirm-cancel-btn');
+                okBtn.addEventListener('click', onOk);
+                cancelBtn.addEventListener('click', onCancel);
+            });
+        };
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function setSyncIndicator(status) {
+            const el = document.getElementById('sync-status');
+            if (!el) return;
+            if (status === 'saving') {
+                el.innerHTML = `<i class="ph ph-arrows-clockwise animate-spin text-indigo-600 text-sm"></i><span class="text-indigo-700 font-medium">Zapisywanie...</span>`;
+            } else if (status === 'saved') {
+                el.innerHTML = `<i class="ph ph-check-circle text-emerald-600 text-sm"></i><span class="text-emerald-700 font-medium">Zapisano w chmurze</span>`;
+            } else if (status === 'error') {
+                el.innerHTML = `<i class="ph ph-warning-circle text-red-600 text-sm"></i><span class="text-red-700 font-medium">Błąd zapisu</span>`;
+            }
+        }
+
+        // =========================================================================
+        // 4. AUTORYZACJA I ZARZĄDZANIE SESJĄ
+        // =========================================================================
+        window.switchAuthMode = (mode) => {
+            const loginForm = document.getElementById('login-form');
+            const regForm = document.getElementById('register-admin-form');
+            const tabLogin = document.getElementById('tab-login-btn');
+            const tabReg = document.getElementById('tab-register-btn');
+
+            if (mode === 'login') {
+                loginForm.classList.remove('hidden');
+                regForm.classList.add('hidden');
+                tabLogin.className = 'flex-1 py-1.5 text-sm font-medium rounded-md bg-white text-slate-900 shadow-2xs transition';
+                tabReg.className = 'flex-1 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 transition';
+            } else {
+                loginForm.classList.add('hidden');
+                regForm.classList.remove('hidden');
+                tabReg.className = 'flex-1 py-1.5 text-sm font-medium rounded-md bg-white text-slate-900 shadow-2xs transition';
+                tabLogin.className = 'flex-1 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 transition';
+            }
+        };
+
+        // Obsługa logowania
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!isConfigured) {
+                showToast("Najpierw uzupełnij obiekt firebaseConfig w kodzie pliku HTML.", "error");
+                return;
+            }
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const btn = document.getElementById('login-submit-btn');
+
+            try {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="ph ph-spinner animate-spin text-lg"></i><span>Logowanie...</span>`;
+                await signInWithEmailAndPassword(auth, email, password);
+                showToast("Zalogowano pomyślnie.", "success");
+            } catch (err) {
+                console.error(err);
+                let msg = "Błąd logowania. Sprawdź e-mail i hasło.";
+                if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+                    msg = "Nieprawidłowy adres e-mail lub hasło.";
+                } else if (err.code === 'auth/too-many-requests') {
+                    msg = "Zbyt wiele nieudanych prób. Spróbuj ponownie za chwilę.";
+                }
+                showToast(msg, "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="ph ph-sign-in text-lg"></i><span>Zaloguj się do systemu</span>`;
+            }
+        });
+
+        // Rejestracja pierwszego Administratora
+        document.getElementById('register-admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!isConfigured) {
+                showToast("Najpierw uzupełnij obiekt firebaseConfig w kodzie pliku HTML.", "error");
+                return;
+            }
+            const title = document.getElementById('reg-title').value.trim();
+            const name = document.getElementById('reg-name').value.trim();
+            const email = document.getElementById('reg-email').value.trim();
+            const password = document.getElementById('reg-password').value;
+            const isLecturer = document.getElementById('reg-is-lecturer').checked;
+            const btn = document.getElementById('reg-submit-btn');
+
+            try {
+                btn.disabled = true;
+                btn.innerHTML = `<i class="ph ph-spinner animate-spin text-lg"></i><span>Tworzenie konta...</span>`;
+                
+                const cred = await createUserWithEmailAndPassword(auth, email, password);
+                await setDoc(getDocRef('users', cred.user.uid), {
+                    uid: cred.user.uid,
+                    email,
+                    name,
+                    title,
+                    role: 'admin',
+                    isLecturer: isLecturer,
+                    createdAt: new Date().toISOString()
+                });
+
+                showToast("Konto Administratora zostało utworzone!", "success");
+            } catch (err) {
+                console.error(err);
+                let msg = "Nie udało się utworzyć konta.";
+                if (err.code === 'auth/email-already-in-use') msg = "Ten adres e-mail jest już zajęty.";
+                if (err.code === 'auth/weak-password') msg = "Hasło musi mieć co najmniej 6 znaków.";
+                showToast(msg, "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="ph ph-user-plus text-lg"></i><span>Utwórz konto Administratora</span>`;
+            }
+        });
+
+        window.handleLogout = async () => {
+            try {
+                clearSubscriptions();
+                await signOut(auth);
+                showToast("Wylogowano z systemu.", "info");
+            } catch (err) {
+                showToast("Błąd podczas wylogowywania.", "error");
+            }
+        };
+
+        function clearSubscriptions() {
+            state.unsubscribers.forEach(unsub => unsub());
+            state.unsubscribers = [];
+        }
+
+        // Nasłuch stanu autoryzacji Firebase
+        if (isConfigured) {
+            onAuthStateChanged(auth, async (user) => {
+                const loadingEl = document.getElementById('loading-screen');
+                const authView = document.getElementById('auth-view');
+                const appView = document.getElementById('app-view');
+
+                if (user) {
+                    state.currentUser = user;
+                    try {
+                        // Pobranie profilu użytkownika z Firestore
+                        const userSnap = await getDoc(getDocRef('users', user.uid));
+                        if (userSnap.exists()) {
+                            state.userProfile = userSnap.data();
+                        } else {
+                            // Jeśli użytkownik zalogował się np. tokenem bez rekordu w 'users', tworzymy profil domyślny
+                            const fallbackProfile = {
+                                uid: user.uid,
+                                email: user.email || 'uzytkownik@uczelnia.edu.pl',
+                                name: user.displayName || 'Użytkownik Systemu',
+                                title: 'mgr',
+                                role: 'admin',
+                                isLecturer: true,
+                                createdAt: new Date().toISOString()
+                            };
+                            await setDoc(getDocRef('users', user.uid), fallbackProfile);
+                            state.userProfile = fallbackProfile;
+                        }
+
+                        setupUserUI();
+                        initFirestoreListeners();
+
+                        authView.classList.add('hidden');
+                        authView.classList.remove('flex');
+                        appView.classList.remove('hidden');
+                    } catch (err) {
+                        console.error("Błąd ładowania profilu:", err);
+                        showToast("Błąd połączenia z bazą Firestore. Sprawdź reguły dostępu.", "error");
+                    }
+                } else {
+                    clearSubscriptions();
+                    state.currentUser = null;
+                    state.userProfile = null;
+                    appView.classList.add('hidden');
+                    authView.classList.remove('hidden');
+                    authView.classList.add('flex');
+                }
+                loadingEl.classList.add('hidden');
+            });
+        } else {
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('auth-view').classList.remove('hidden');
+            document.getElementById('auth-view').classList.add('flex');
+        }
+
+        function setupUserUI() {
+            const p = state.userProfile;
+            const fullName = `${p.title ? p.title + ' ' : ''}${p.name}`;
+            document.getElementById('user-display-name').textContent = fullName;
+
+            let roleLabel = p.role === 'admin' ? 'Administrator' : 'Wykładowca';
+            if (p.role === 'admin' && p.isLecturer) {
+                roleLabel += ' & Wykładowca';
+            }
+            document.getElementById('user-display-role').textContent = roleLabel;
+
+            // Pokazywanie / ukrywanie zakładek administracyjnych
+            const adminElements = document.querySelectorAll('.admin-only');
+            adminElements.forEach(el => {
+                if (p.role === 'admin') {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+
+            // Reset do zakładki Dziennik Ocen
+            switchMainTab('gradebook');
+        }
+
+        // =========================================================================
+        // 5. SUBSKRYPCJE DANYCH FIRESTORE (REAL-TIME)
+        // =========================================================================
+        function initFirestoreListeners() {
+            clearSubscriptions();
+            if (!state.currentUser) return;
+
+            // 1. Użytkownicy (kadra)
+            const unsubUsers = onSnapshot(getColRef('users'), (snap) => {
+                state.users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                state.users.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pl'));
+                populateLecturerSelects();
+                renderUsersTable();
+                renderSubjectsTable();
+                updateSubjectHeaderInfo();
+            }, (err) => console.error("Błąd subskrypcji users:", err));
+
+            // 2. Wydziały
+            const unsubFaculties = onSnapshot(getColRef('faculties'), (snap) => {
+                state.faculties = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                state.faculties.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pl'));
+                populateFacultySelects();
+                renderFacultiesList();
+                renderStudentsTable();
+                renderSubjectsTable();
+            }, (err) => console.error("Błąd subskrypcji faculties:", err));
+
+            // 3. Studenci
+            const unsubStudents = onSnapshot(getColRef('students'), (snap) => {
+                state.students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                state.students.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '', 'pl'));
+                renderStudentsTable();
+                renderGradebookTable();
+            }, (err) => console.error("Błąd subskrypcji students:", err));
+
+            // 4. Przedmioty
+            const unsubSubjects = onSnapshot(getColRef('subjects'), (snap) => {
+                state.subjects = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                state.subjects.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pl'));
+                populateGradebookSubjectSelect();
+                renderSubjectsTable();
+                updateSubjectHeaderInfo();
+            }, (err) => console.error("Błąd subskrypcji subjects:", err));
+
+            // 5. Kolumny ocen (pobieramy wszystkie i filtrujemy po wybranym przedmiocie w pamięci)
+            const unsubCols = onSnapshot(getColRef('gradeColumns'), (snap) => {
+                state.gradeColumns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                state.gradeColumns.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+                renderGradebookTable();
+            }, (err) => console.error("Błąd subskrypcji gradeColumns:", err));
+
+            // 6. Oceny studentów (dokumenty w kolekcji 'grades' o ID = `${subjectId}_${studentId}`)
+            const unsubGrades = onSnapshot(getColRef('grades'), (snap) => {
+                const gradesMap = {};
+                snap.docs.forEach(d => {
+                    const data = d.data();
+                    if (data.subjectId && data.studentId) {
+                        if (!gradesMap[data.subjectId]) gradesMap[data.subjectId] = {};
+                        gradesMap[data.subjectId][data.studentId] = data.scores || {};
+                    }
+                });
+                state.grades = gradesMap;
+                renderGradebookTable();
+            }, (err) => console.error("Błąd subskrypcji grades:", err));
+
+            state.unsubscribers.push(unsubUsers, unsubFaculties, unsubStudents, unsubSubjects, unsubCols, unsubGrades);
+        }
+
+        // =========================================================================
+        // 6. NAWIGACJA MIĘDZY ZAKŁADKAMI
+        // =========================================================================
+        window.switchMainTab = (tabName) => {
+            if (tabName !== 'gradebook' && state.userProfile?.role !== 'admin') {
+                showToast("Brak uprawnień administratora.", "error");
+                return;
+            }
+
+            const tabs = ['gradebook', 'students', 'subjects', 'users'];
+            tabs.forEach(t => {
+                const section = document.getElementById(`tab-${t}`);
+                const btn = document.getElementById(`nav-${t}`);
+                if (t === tabName) {
+                    section.classList.remove('hidden');
+                    btn.className = 'nav-tab-btn px-3 py-1.5 rounded-md text-sm font-medium bg-white text-indigo-950 shadow-2xs flex items-center gap-1.5 whitespace-nowrap transition';
+                } else {
+                    section.classList.add('hidden');
+                    btn.className = 'nav-tab-btn px-3 py-1.5 rounded-md text-sm font-medium text-indigo-200 hover:text-white hover:bg-indigo-800/60 flex items-center gap-1.5 whitespace-nowrap transition';
+                    if (t !== 'gradebook' && state.userProfile?.role !== 'admin') {
+                        btn.classList.add('hidden');
+                    }
+                }
+            });
+        };
+
+        // =========================================================================
+        // 7. LOGIKA UPRAWNIEŃ I DZIENNIKA OCEN
+        // =========================================================================
+        function isAdmin() {
+            return state.userProfile?.role === 'admin';
+        }
+
+        function getSelectedSubject() {
+            return state.subjects.find(s => s.id === state.selectedSubjectId) || null;
+        }
+
+        // Czy aktualny użytkownik jest przypisany jako prowadzący do wybranego przedmiotu
+        function isSubjectOwner(subject) {
+            if (!subject || !state.currentUser) return false;
+            return subject.lecturerUid === state.currentUser.uid;
+        }
+
+        // Czy użytkownik może dodać nową kolumnę oceny w wybranym przedmiocie
+        function canAddColumnInSubject(subject) {
+            if (!subject) return false;
+            return isAdmin() || isSubjectOwner(subject);
+        }
+
+        // Czy użytkownik może edytować/usunąć konkretną kolumnę oceny i wpisywać do niej wyniki
+        function canEditColumn(column, subject) {
+            if (!column || !subject || !state.currentUser) return false;
+            if (isAdmin()) return true;
+            // Wykładowca może edytować kolumny w swoim przedmiocie lub te, które sam utworzył
+            return column.createdByUid === state.currentUser.uid || isSubjectOwner(subject);
+        }
+
+        function populateFacultySelects() {
+            const selects = [
+                { id: 'select-faculty', placeholder: '-- Wybierz wydział --', keepValue: true },
+                { id: 'stu-faculty', placeholder: '-- Wybierz wydział --', keepValue: true },
+                { id: 'sub-faculty', placeholder: '-- Wybierz wydział --', keepValue: true },
+                { id: 'filter-students-faculty', placeholder: 'Wszystkie wydziały', allValue: 'ALL', keepValue: true }
+            ];
+
+            selects.forEach(cfg => {
+                const el = document.getElementById(cfg.id);
+                if (!el) return;
+                const prev = el.value;
+                el.innerHTML = `<option value="${cfg.allValue || ''}">${cfg.placeholder}</option>`;
+                state.faculties.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f.id;
+                    opt.textContent = `${f.code ? '[' + f.code + '] ' : ''}${f.name}`;
+                    el.appendChild(opt);
+                });
+                if (cfg.keepValue && prev && [...el.options].some(o => o.value === prev)) {
+                    el.value = prev;
+                }
+            });
+
+            // Jeśli nie wybrano jeszcze wydziału w dzienniku, a jest dostępny, ustaw pierwszy
+            const mainFacEl = document.getElementById('select-faculty');
+            if (!state.selectedFacultyId && state.faculties.length > 0) {
+                state.selectedFacultyId = state.faculties[0].id;
+                mainFacEl.value = state.selectedFacultyId;
+                populateGradebookSubjectSelect();
+            }
+        }
+
+        window.onFacultyChange = () => {
+            state.selectedFacultyId = document.getElementById('select-faculty').value;
+            state.selectedSubjectId = '';
+            populateGradebookSubjectSelect();
+            updateSubjectHeaderInfo();
+            renderGradebookTable();
+        };
+
+        function populateGradebookSubjectSelect() {
+            const el = document.getElementById('select-subject');
+            if (!el) return;
+            const prev = state.selectedSubjectId;
+
+            if (!state.selectedFacultyId) {
+                el.innerHTML = `<option value="">-- Najpierw wybierz wydział --</option>`;
+                return;
+            }
+
+            const facultySubjects = state.subjects.filter(s => s.facultyId === state.selectedFacultyId);
+            if (facultySubjects.length === 0) {
+                el.innerHTML = `<option value="">-- Brak przedmiotów na tym wydziale --</option>`;
+                state.selectedSubjectId = '';
+                return;
+            }
+
+            el.innerHTML = `<option value="">-- Wybierz przedmiot (${facultySubjects.length}) --</option>`;
+            facultySubjects.forEach(s => {
+                const isMine = state.currentUser && s.lecturerUid === state.currentUser.uid;
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = `${s.name} ${isMine ? '★ (Twój przedmiot)' : ''}`;
+                el.appendChild(opt);
+            });
+
+            if (prev && facultySubjects.some(s => s.id === prev)) {
+                el.value = prev;
+            } else if (facultySubjects.length === 1) {
+                // Automatycznie wybierz jedyny przedmiot na wydziale dla wygody
+                el.value = facultySubjects[0].id;
+                state.selectedSubjectId = facultySubjects[0].id;
+                updateSubjectHeaderInfo();
+                renderGradebookTable();
+            }
+        }
+
+        window.onSubjectChange = () => {
+            state.selectedSubjectId = document.getElementById('select-subject').value;
+            updateSubjectHeaderInfo();
+            renderGradebookTable();
+        };
+
+        function updateSubjectHeaderInfo() {
+            const subject = getSelectedSubject();
+            const toolbar = document.getElementById('subject-toolbar');
+            const badge = document.getElementById('permission-badge');
+            const addColBtn = document.getElementById('add-grade-col-btn');
+            const lecturerNameEl = document.getElementById('subject-lecturer-name');
+
+            if (!subject) {
+                toolbar.classList.add('hidden');
+                badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600';
+                badge.innerHTML = `<i class="ph ph-info"></i><span>Wybierz przedmiot</span>`;
+                return;
+            }
+
+            toolbar.classList.remove('hidden');
+
+            // Znajdź nazwisko prowadzącego
+            const lecturer = state.users.find(u => u.uid === subject.lecturerUid);
+            lecturerNameEl.textContent = lecturer ? `${lecturer.title ? lecturer.title + ' ' : ''}${lecturer.name}` : 'Nieprzypisany';
+
+            // Uprawnienia
+            if (isAdmin()) {
+                badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-800 border border-indigo-200';
+                badge.innerHTML = `<i class="ph ph-shield-check text-sm"></i><span>Tryb Administratora (Pełna edycja)</span>`;
+                addColBtn.classList.remove('hidden');
+            } else if (isSubjectOwner(subject)) {
+                badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200';
+                badge.innerHTML = `<i class="ph ph-pencil-simple text-sm"></i><span>Twój przedmiot (Edycja aktywna)</span>`;
+                addColBtn.classList.remove('hidden');
+            } else {
+                badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200';
+                badge.innerHTML = `<i class="ph ph-eye text-sm"></i><span>Podgląd (Tylko do odczytu)</span>`;
+                addColBtn.classList.add('hidden');
+            }
+        }
+
+        // =========================================================================
+        // 8. RENDEROWANIE TABELI DZIENNIKA OCEN + OBLICZANIE ŚREDNIEJ WAŻONEJ
+        // =========================================================================
+        function renderGradebookTable() {
+            const subject = getSelectedSubject();
+            const emptyState = document.getElementById('gradebook-empty-state');
+            const tableWrapper = document.getElementById('gradebook-table-wrapper');
+            const theadRow = document.getElementById('gradebook-thead-row');
+            const tbody = document.getElementById('gradebook-tbody');
+
+            if (!subject) {
+                emptyState.classList.remove('hidden');
+                tableWrapper.classList.add('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            tableWrapper.classList.remove('hidden');
+
+            // Studenci przypisani do wybranego wydziału
+            const facultyStudents = state.students.filter(st => st.facultyId === subject.facultyId);
+            // Kolumny ocen dla wybranego przedmiotu
+            const subjectColumns = state.gradeColumns.filter(c => c.subjectId === subject.id);
+            // Oceny dla wybranego przedmiotu
+            const subjectGrades = state.grades[subject.id] || {};
+
+            // --- BUDOWANIE NAGŁÓWKA TABELI ---
+            let theadHtml = `
+                <th class="py-3.5 px-4 font-semibold text-slate-700 bg-slate-50 border-r border-slate-200 w-28 whitespace-nowrap">Nr indeksu</th>
+                <th class="py-3.5 px-4 font-semibold text-slate-700 bg-slate-50 border-r border-slate-200 sticky-col-left min-w-[200px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">Student</th>
+            `;
+
+            subjectColumns.forEach(col => {
+                const editable = canEditColumn(col, subject);
+                theadHtml += `
+                    <th class="py-2.5 px-3 font-medium text-slate-800 bg-slate-50 border-r border-slate-200 min-w-[165px] align-top">
+                        <div class="flex items-start justify-between gap-1.5">
+                            <div>
+                                <div class="font-bold text-slate-900 normal-case text-xs leading-snug">${escapeHtml(col.type)}</div>
+                                <div class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[11px] font-semibold normal-case">
+                                    Waga: ${col.weight}
+                                </div>
+                            </div>
+                            ${editable ? `
+                                <div class="flex items-center gap-0.5 shrink-0">
+                                    <button onclick="openColumnModal('${col.id}')" title="Edytuj kolumnę" class="p-1 text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 rounded transition">
+                                        <i class="ph ph-pencil-simple text-sm"></i>
+                                    </button>
+                                    <button onclick="deleteGradeColumn('${col.id}')" title="Usuń kolumnę" class="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition">
+                                        <i class="ph ph-trash text-sm"></i>
+                                    </button>
+                                </div>
+                            ` : `
+                                <span title="Utworzone przez: ${escapeHtml(col.createdByName || 'Inny wykładowca')}" class="text-slate-400 p-1">
+                                    <i class="ph ph-lock-simple text-xs"></i>
+                                </span>
+                            `}
+                        </div>
+                        ${col.description ? `<div class="mt-1 text-[11px] text-slate-500 font-normal normal-case truncate max-w-[155px]" title="${escapeHtml(col.description)}">${escapeHtml(col.description)}</div>` : ''}
+                        <div class="mt-1 text-[10px] text-slate-400 font-normal normal-case truncate max-w-[155px]">
+                            Autor: ${escapeHtml(col.createdByName || '—')}
+                        </div>
+                    </th>
+                `;
+            });
+
+            if (subjectColumns.length === 0) {
+                theadHtml += `
+                    <th class="py-3.5 px-4 font-normal text-slate-400 italic normal-case border-r border-slate-200 min-w-[220px]">
+                        Brak zdefiniowanych ocen (kliknij „Dodaj kolumnę oceny”)
+                    </th>
+                `;
+            }
+
+            theadHtml += `
+                <th class="py-3.5 px-4 font-semibold text-slate-800 bg-slate-100/80 border-r border-slate-200 text-center w-36 whitespace-nowrap">Średnia ważona</th>
+                <th class="py-3.5 px-4 font-semibold text-slate-800 bg-slate-100/80 text-center w-36 whitespace-nowrap sticky-col-right shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)]">Zaliczenie (&ge;50%)</th>
+            `;
+            theadRow.innerHTML = theadHtml;
+
+            // --- BUDOWANIE WIERSZY STUDENTÓW ---
+            if (facultyStudents.length === 0) {
+                const colSpan = subjectColumns.length + 4 + (subjectColumns.length === 0 ? 1 : 0);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="${colSpan}" class="py-10 px-4 text-center text-slate-500">
+                            Brak studentów przypisanych do tego wydziału. Administrator może dodać studentów w zakładce <strong>Studenci</strong>.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let tbodyHtml = '';
+            facultyStudents.forEach(student => {
+                const studentScores = subjectGrades[student.id] || {};
+                let weightedSum = 0;
+                let totalWeight = 0;
+
+                let cellsHtml = '';
+                subjectColumns.forEach(col => {
+                    const rawVal = studentScores[col.id];
+                    const hasVal = rawVal !== undefined && rawVal !== null && rawVal !== '';
+                    const numVal = hasVal ? Number(rawVal) : null;
+                    const editable = canEditColumn(col, subject);
+
+                    if (numVal !== null && !isNaN(numVal)) {
+                        const weight = Number(col.weight) || 1;
+                        weightedSum += numVal * weight;
+                        totalWeight += weight;
+                    }
+
+                    // Kolorowanie komórki w zależności od wyniku (<50% czerwony, >=50% zielony)
+                    let inputColorClass = 'border-slate-200 bg-white text-slate-900';
+                    if (numVal !== null && !isNaN(numVal)) {
+                        if (numVal >= 50) {
+                            inputColorClass = 'border-emerald-300 bg-emerald-50/60 text-emerald-900 font-semibold';
+                        } else {
+                            inputColorClass = 'border-red-300 bg-red-50/60 text-red-800 font-semibold';
+                        }
+                    } else if (!editable) {
+                        inputColorClass = 'border-slate-100 bg-slate-50 text-slate-400';
+                    }
+
+                    cellsHtml += `
+                        <td class="py-2 px-3 border-r border-slate-200 text-center">
+                            <div class="relative inline-flex items-center justify-center w-24">
+                                <input 
+                                    type="number" 
+                                    min="0" 
+                                    max="100" 
+                                    step="1"
+                                    value="${hasVal ? numVal : ''}"
+                                    placeholder="—"
+                                    ${editable ? '' : 'disabled'}
+                                    onchange="handleGradeChange('${subject.id}', '${student.id}', '${col.id}', this)"
+                                    class="w-full text-center pr-5 pl-2 py-1.5 rounded-lg border text-sm transition focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed ${inputColorClass}"
+                                >
+                                <span class="absolute right-2.5 text-xs text-slate-400 pointer-events-none">%</span>
+                            </div>
+                        </td>
+                    `;
+                });
+
+                if (subjectColumns.length === 0) {
+                    cellsHtml += `<td class="py-3 px-4 border-r border-slate-200 text-slate-300 text-center">—</td>`;
+                }
+
+                // Obliczenie średniej ważonej
+                let avgDisplay = '—';
+                let avgClass = 'text-slate-400 font-normal';
+                let statusBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Brak ocen</span>`;
+
+                if (totalWeight > 0) {
+                    const avg = weightedSum / totalWeight;
+                    avgDisplay = `${avg.toFixed(1)}%`;
+                    if (avg >= 50) {
+                        avgClass = 'text-emerald-700 font-bold';
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800"><i class="ph ph-check-circle"></i>ZALICZONO</span>`;
+                    } else {
+                        avgClass = 'text-red-700 font-bold';
+                        statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800"><i class="ph ph-x-circle"></i>NIEZALICZONO</span>`;
+                    }
+                }
+
+                tbodyHtml += `
+                    <tr class="hover:bg-slate-50/90 transition-colors">
+                        <td class="py-3 px-4 font-mono text-xs text-slate-600 border-r border-slate-200 bg-white whitespace-nowrap">
+                            ${escapeHtml(student.indexNumber)}
+                        </td>
+                        <td class="py-3 px-4 font-medium text-slate-900 border-r border-slate-200 bg-white sticky-col-left shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] whitespace-nowrap">
+                            ${escapeHtml(student.lastName)} ${escapeHtml(student.firstName)}
+                        </td>
+                        ${cellsHtml}
+                        <td class="py-3 px-4 border-r border-slate-200 bg-slate-50/50 text-center text-sm ${avgClass}">
+                            ${avgDisplay}
+                        </td>
+                        <td class="py-3 px-4 bg-slate-50/50 text-center sticky-col-right shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)] whitespace-nowrap">
+                            ${statusBadge}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = tbodyHtml;
+        }
+
+        // =========================================================================
+        // 9. DODAWANIE / EDYCJA KOLUMN OCEN ORAZ WPISYWANIE WYNIKÓW STUDENTÓW
+        // =========================================================================
+        window.openColumnModal = (columnId = null) => {
+            const subject = getSelectedSubject();
+            if (!subject) return;
+
+            const modal = document.getElementById('column-modal');
+            const titleEl = document.getElementById('column-modal-title');
+            const editIdEl = document.getElementById('col-edit-id');
+            const typeEl = document.getElementById('col-type');
+            const weightEl = document.getElementById('col-weight');
+            const descEl = document.getElementById('col-desc');
+
+            if (columnId) {
+                const col = state.gradeColumns.find(c => c.id === columnId);
+                if (!col || !canEditColumn(col, subject)) {
+                    showToast("Brak uprawnień do edycji tej kolumny.", "error");
+                    return;
+                }
+                titleEl.textContent = "Edytuj kolumnę oceny";
+                editIdEl.value = col.id;
+                typeEl.value = col.type;
+                weightEl.value = String(col.weight);
+                descEl.value = col.description || '';
+            } else {
+                if (!canAddColumnInSubject(subject)) {
+                    showToast("Nie możesz dodawać kolumn w tym przedmiocie.", "error");
+                    return;
+                }
+                titleEl.textContent = "Dodaj nową kolumnę oceny";
+                editIdEl.value = '';
+                typeEl.value = 'Kolokwium';
+                weightEl.value = '3';
+                descEl.value = '';
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        window.closeColumnModal = () => {
+            const modal = document.getElementById('column-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
+        document.getElementById('column-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const subject = getSelectedSubject();
+            if (!subject) return;
+
+            const editId = document.getElementById('col-edit-id').value;
+            const type = document.getElementById('col-type').value;
+            const weight = Number(document.getElementById('col-weight').value);
+            const description = document.getElementById('col-desc').value.trim();
+
+            try {
+                setSyncIndicator('saving');
+                if (editId) {
+                    await updateDoc(getDocRef('gradeColumns', editId), {
+                        type,
+                        weight,
+                        description
+                    });
+                    showToast("Zaktualizowano ustawienia kolumny oceny.", "success");
+                } else {
+                    const authorName = `${state.userProfile.title ? state.userProfile.title + ' ' : ''}${state.userProfile.name}`;
+                    await addDoc(getColRef('gradeColumns'), {
+                        subjectId: subject.id,
+                        type,
+                        weight,
+                        description,
+                        createdByUid: state.currentUser.uid,
+                        createdByName: authorName,
+                        createdAt: new Date().toISOString()
+                    });
+                    showToast("Dodano nową kolumnę oceny.", "success");
+                }
+                setSyncIndicator('saved');
+                closeColumnModal();
+            } catch (err) {
+                console.error(err);
+                setSyncIndicator('error');
+                showToast("Błąd zapisu kolumny oceny.", "error");
+            }
+        });
+
+        window.deleteGradeColumn = async (columnId) => {
+            const subject = getSelectedSubject();
+            const col = state.gradeColumns.find(c => c.id === columnId);
+            if (!col || !canEditColumn(col, subject)) return;
+
+            const confirmed = await showConfirm(
+                "Usunąć kolumnę oceny?",
+                `Czy na pewno chcesz usunąć kolumnę "${col.type}" (waga ${col.weight})? Wpisane w niej oceny przestaną być widoczne.`
+            );
+            if (!confirmed) return;
+
+            try {
+                setSyncIndicator('saving');
+                await deleteDoc(getDocRef('gradeColumns', columnId));
+                setSyncIndicator('saved');
+                showToast("Kolumna oceny została usunięta.", "info");
+            } catch (err) {
+                console.error(err);
+                setSyncIndicator('error');
+                showToast("Nie udało się usunąć kolumny.", "error");
+            }
+        };
+
+        // Zapis pojedynczej oceny procentowej studenta
+        window.handleGradeChange = async (subjectId, studentId, columnId, inputEl) => {
+            const subject = state.subjects.find(s => s.id === subjectId);
+            const col = state.gradeColumns.find(c => c.id === columnId);
+            if (!canEditColumn(col, subject)) {
+                showToast("Brak uprawnień do edycji tej oceny.", "error");
+                return;
+            }
+
+            let raw = inputEl.value.trim();
+            let numericVal = null;
+
+            if (raw !== '') {
+                numericVal = Number(raw);
+                if (isNaN(numericVal)) {
+                    showToast("Wpisz poprawną wartość liczbową (0 - 100%).", "warning");
+                    renderGradebookTable();
+                    return;
+                }
+                // Ograniczenie zakresu 0 - 100%
+                if (numericVal < 0) numericVal = 0;
+                if (numericVal > 100) numericVal = 100;
+                inputEl.value = numericVal;
+            }
+
+            try {
+                setSyncIndicator('saving');
+                const gradeDocId = `${subjectId}_${studentId}`;
+                const existingScores = (state.grades[subjectId] && state.grades[subjectId][studentId]) 
+                    ? { ...state.grades[subjectId][studentId] } 
+                    : {};
+
+                if (numericVal === null) {
+                    delete existingScores[columnId];
+                } else {
+                    existingScores[columnId] = numericVal;
+                }
+
+                await setDoc(getDocRef('grades', gradeDocId), {
+                    subjectId,
+                    studentId,
+                    scores: existingScores,
+                    updatedAt: new Date().toISOString(),
+                    updatedByUid: state.currentUser.uid
+                }, { merge: true });
+
+                setSyncIndicator('saved');
+            } catch (err) {
+                console.error(err);
+                setSyncIndicator('error');
+                showToast("Błąd zapisu oceny w bazie danych.", "error");
+            }
+        };
+
+        // =========================================================================
+        // 10. PANEL ADMINISTRATORA: STUDENCI
+        // =========================================================================
+        document.getElementById('add-student-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!isAdmin()) return;
+
+            const indexNumber = document.getElementById('stu-index').value.trim();
+            const firstName = document.getElementById('stu-first-name').value.trim();
+            const lastName = document.getElementById('stu-last-name').value.trim();
+            const facultyId = document.getElementById('stu-faculty').value;
+
+            if (!facultyId) {
+                showToast("Wybierz wydział dla studenta.", "warning");
+                return;
+            }
+
+            try {
+                await addDoc(getColRef('students'), {
+                    indexNumber,
+                    firstName,
+                    lastName,
+                    facultyId,
+                    createdAt: new Date().toISOString()
+                });
+                e.target.reset();
+                document.getElementById('stu-faculty').value = facultyId; // zachowaj wybrany wydział
+                showToast(`Dodano studenta: ${firstName} ${lastName}`, "success");
+            } catch (err) {
+                console.error(err);
+                showToast("Błąd podczas dodawania studenta.", "error");
+            }
+        });
+
+        window.renderStudentsTable = () => {
+            const tbody = document.getElementById('students-table-body');
+            if (!tbody) return;
+            const filterFac = document.getElementById('filter-students-faculty')?.value || 'ALL';
+
+            const filtered = filterFac === 'ALL' 
+                ? state.students 
+                : state.students.filter(s => s.facultyId === filterFac);
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-8 px-4 text-center text-slate-400">Brak studentów spełniających kryteria.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(s => {
+                const fac = state.faculties.find(f => f.id === s.facultyId);
+                const facLabel = fac ? `${fac.code ? '[' + fac.code + '] ' : ''}${fac.name}` : '<span class="text-red-500">Nieprzypisany</span>';
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-3 px-4 font-mono text-xs text-slate-600">${escapeHtml(s.indexNumber)}</td>
+                        <td class="py-3 px-4 font-medium text-slate-900">${escapeHtml(s.lastName)} ${escapeHtml(s.firstName)}</td>
+                        <td class="py-3 px-4 text-slate-600">${facLabel}</td>
+                        <td class="py-3 px-4 text-right whitespace-nowrap">
+                            <button onclick="openEditStudentModal('${s.id}')" class="p-1.5 text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition" title="Edytuj">
+                                <i class="ph ph-pencil-simple text-base"></i>
+                            </button>
+                            <button onclick="deleteStudent('${s.id}')" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Usuń">
+                                <i class="ph ph-trash text-base"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        };
+
+        window.openEditStudentModal = (studentId) => {
+            const s = state.students.find(st => st.id === studentId);
+            if (!s) return;
+
+            const facOptions = state.faculties.map(f => 
+                `<option value="${f.id}" ${f.id === s.facultyId ? 'selected' : ''}>${escapeHtml(f.name)}</option>`
+            ).join('');
+
+            document.getElementById('admin-modal-title').textContent = "Edytuj dane studenta";
+            document.getElementById('admin-modal-body').innerHTML = `
+                <form id="edit-student-modal-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Nr indeksu *</label>
+                        <input type="text" id="edit-stu-index" required value="${escapeHtml(s.indexNumber)}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Imię *</label>
+                            <input type="text" id="edit-stu-first" required value="${escapeHtml(s.firstName)}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Nazwisko *</label>
+                            <input type="text" id="edit-stu-last" required value="${escapeHtml(s.lastName)}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Wydział *</label>
+                        <select id="edit-stu-fac" required class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">${facOptions}</select>
+                    </div>
+                    <div class="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                        <button type="button" onclick="closeAdminModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg">Anuluj</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-700 rounded-lg">Zapisz zmiany</button>
+                    </div>
+                </form>
+            `;
+            openAdminModal();
+
+            document.getElementById('edit-student-modal-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    await updateDoc(getDocRef('students', studentId), {
+                        indexNumber: document.getElementById('edit-stu-index').value.trim(),
+                        firstName: document.getElementById('edit-stu-first').value.trim(),
+                        lastName: document.getElementById('edit-stu-last').value.trim(),
+                        facultyId: document.getElementById('edit-stu-fac').value
+                    });
+                    closeAdminModal();
+                    showToast("Zaktualizowano dane studenta.", "success");
+                } catch (err) {
+                    showToast("Błąd aktualizacji studenta.", "error");
+                }
+            });
+        };
+
+        window.deleteStudent = async (studentId) => {
+            const s = state.students.find(st => st.id === studentId);
+            if (!s) return;
+            const ok = await showConfirm("Usunąć studenta?", `Czy na pewno chcesz usunąć studenta ${s.firstName} ${s.lastName} (indeks: ${s.indexNumber})?`);
+            if (!ok) return;
+
+            try {
+                await deleteDoc(getDocRef('students', studentId));
+                showToast("Student został usunięty.", "info");
+            } catch (err) {
+                showToast("Błąd usuwania studenta.", "error");
+            }
+        };
+
+        // =========================================================================
+        // 11. PANEL ADMINISTRATORA: WYDZIAŁY I PRZEDMIOTY
+        // =========================================================================
+        document.getElementById('add-faculty-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!isAdmin()) return;
+
+            const name = document.getElementById('fac-name').value.trim();
+            const code = document.getElementById('fac-code').value.trim().toUpperCase();
+
+            try {
+                await addDoc(getColRef('faculties'), {
+                    name,
+                    code,
+                    createdAt: new Date().toISOString()
+                });
+                e.target.reset();
+                showToast(`Utworzono wydział: ${name}`, "success");
+            } catch (err) {
+                showToast("Błąd tworzenia wydziału.", "error");
+            }
+        });
+
+        function renderFacultiesList() {
+            const container = document.getElementById('faculties-list');
+            if (!container) return;
+
+            if (state.faculties.length === 0) {
+                container.innerHTML = `<div class="p-6 text-center text-slate-400 text-xs">Brak utworzonych wydziałów.</div>`;
+                return;
+            }
+
+            container.innerHTML = state.faculties.map(f => `
+                <div class="p-3.5 px-4 flex items-center justify-between gap-2 hover:bg-slate-50">
+                    <div>
+                        <span class="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-xs font-semibold mr-2">${escapeHtml(f.code)}</span>
+                        <span class="font-medium text-slate-800">${escapeHtml(f.name)}</span>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button onclick="openEditFacultyModal('${f.id}')" class="p-1.5 text-slate-400 hover:text-indigo-700 rounded-lg" title="Edytuj">
+                            <i class="ph ph-pencil-simple"></i>
+                        </button>
+                        <button onclick="deleteFaculty('${f.id}')" class="p-1.5 text-slate-400 hover:text-red-600 rounded-lg" title="Usuń">
+                            <i class="ph ph-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.openEditFacultyModal = (facId) => {
+            const f = state.faculties.find(x => x.id === facId);
+            if (!f) return;
+
+            document.getElementById('admin-modal-title').textContent = "Edytuj wydział";
+            document.getElementById('admin-modal-body').innerHTML = `
+                <form id="edit-fac-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Nazwa wydziału *</label>
+                        <input type="text" id="edit-fac-name" required value="${escapeHtml(f.name)}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Skrót / Kod *</label>
+                        <input type="text" id="edit-fac-code" required value="${escapeHtml(f.code)}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase">
+                    </div>
+                    <div class="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                        <button type="button" onclick="closeAdminModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg">Anuluj</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-700 rounded-lg">Zapisz zmiany</button>
+                    </div>
+                </form>
+            `;
+            openAdminModal();
+
+            document.getElementById('edit-fac-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    await updateDoc(getDocRef('faculties', facId), {
+                        name: document.getElementById('edit-fac-name').value.trim(),
+                        code: document.getElementById('edit-fac-code').value.trim().toUpperCase()
+                    });
+                    closeAdminModal();
+                    showToast("Zaktualizowano wydział.", "success");
+                } catch (err) {
+                    showToast("Błąd edycji wydziału.", "error");
+                }
+            });
+        };
+
+        window.deleteFaculty = async (facId) => {
+            const f = state.faculties.find(x => x.id === facId);
+            if (!f) return;
+            const ok = await showConfirm("Usunąć wydział?", `Czy na pewno chcesz usunąć wydział "${f.name}"?`);
+            if (!ok) return;
+
+            try {
+                await deleteDoc(getDocRef('faculties', facId));
+                showToast("Wydział został usunięty.", "info");
+            } catch (err) {
+                showToast("Błąd usuwania wydziału.", "error");
+            }
+        };
+
+        // Przedmioty
+        function populateLecturerSelects() {
+            const el = document.getElementById('sub-lecturer');
+            if (!el) return;
+            const prev = el.value;
+
+            // Wykładowcy oraz Administratorzy mający flagę isLecturer === true
+            const eligibleLecturers = state.users.filter(u => u.role === 'lecturer' || u.isLecturer === true);
+
+            el.innerHTML = `<option value="">-- Wybierz prowadzącego --</option>`;
+            eligibleLecturers.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.uid;
+                opt.textContent = `${u.title ? u.title + ' ' : ''}${u.name} (${u.role === 'admin' ? 'Admin' : 'Wykładowca'})`;
+                el.appendChild(opt);
+            });
+
+            if (prev && [...el.options].some(o => o.value === prev)) {
+                el.value = prev;
+            }
+        }
+
+        document.getElementById('add-subject-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!isAdmin()) return;
+
+            const name = document.getElementById('sub-name').value.trim();
+            const facultyId = document.getElementById('sub-faculty').value;
+            const lecturerUid = document.getElementById('sub-lecturer').value;
+
+            if (!facultyId || !lecturerUid) {
+                showToast("Wybierz wydział oraz prowadzącego wykładowcę.", "warning");
+                return;
+            }
+
+            try {
+                await addDoc(getColRef('subjects'), {
+                    name,
+                    facultyId,
+                    lecturerUid,
+                    createdAt: new Date().toISOString()
+                });
+                e.target.reset();
+                showToast(`Utworzono przedmiot: ${name}`, "success");
+            } catch (err) {
+                showToast("Błąd dodawania przedmiotu.", "error");
+            }
+        });
+
+        function renderSubjectsTable() {
+            const tbody = document.getElementById('subjects-table-body');
+            if (!tbody) return;
+
+            if (state.subjects.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-8 px-4 text-center text-slate-400">Brak zdefiniowanych przedmiotów.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = state.subjects.map(sub => {
+                const fac = state.faculties.find(f => f.id === sub.facultyId);
+                const lec = state.users.find(u => u.uid === sub.lecturerUid);
+                const lecName = lec ? `${lec.title ? lec.title + ' ' : ''}${lec.name}` : '<span class="text-slate-400">Brak</span>';
+
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-3 px-4 font-medium text-slate-900">${escapeHtml(sub.name)}</td>
+                        <td class="py-3 px-4 text-slate-600">${fac ? escapeHtml(fac.code || fac.name) : '—'}</td>
+                        <td class="py-3 px-4 text-slate-700">${lecName}</td>
+                        <td class="py-3 px-4 text-right whitespace-nowrap">
+                            <button onclick="openEditSubjectModal('${sub.id}')" class="p-1.5 text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition" title="Edytuj">
+                                <i class="ph ph-pencil-simple text-base"></i>
+                            </button>
+                            <button onclick="deleteSubject('${sub.id}')" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Usuń">
+                                <i class="ph ph-trash text-base"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        window.openEditSubjectModal = (subId) => {
+            const sub = state.subjects.find(s => s.id === subId);
+            if (!sub) return;
+
+            const facOptions = state.faculties.map(f => 
+                `<option value="${f.id}" ${f.id === sub.facultyId ? 'selected' : ''}>${escapeHtml(f.name)}</option>`
+            ).join('');
+
+            const eligibleLecturers = state.users.filter(u => u.role === 'lecturer' || u.isLecturer === true);
+            const lecOptions = eligibleLecturers.map(u => 
+                `<option value="${u.uid}" ${u.uid === sub.lecturerUid ? 'selected' : ''}>${escapeHtml((u.title ? u.title + ' ' : '') + u.name)}</option>`
+            ).join('');
+
+            document.getElementById('admin-modal-title').textContent = "Edytuj przedmiot";
+            document.getElementById('admin-modal-body').innerHTML = `
+                <form id="edit-sub-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Nazwa przedmiotu *</label>
+                        <input type="text" id="edit-sub-name" required value="${escapeHtml(sub.name)}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Wydział *</label>
+                        <select id="edit-sub-fac" required class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">${facOptions}</select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Prowadzący wykładowca *</label>
+                        <select id="edit-sub-lec" required class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">${lecOptions}</select>
+                    </div>
+                    <div class="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                        <button type="button" onclick="closeAdminModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg">Anuluj</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-700 rounded-lg">Zapisz zmiany</button>
+                    </div>
+                </form>
+            `;
+            openAdminModal();
+
+            document.getElementById('edit-sub-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    await updateDoc(getDocRef('subjects', subId), {
+                        name: document.getElementById('edit-sub-name').value.trim(),
+                        facultyId: document.getElementById('edit-sub-fac').value,
+                        lecturerUid: document.getElementById('edit-sub-lec').value
+                    });
+                    closeAdminModal();
+                    showToast("Zaktualizowano przedmiot.", "success");
+                } catch (err) {
+                    showToast("Błąd aktualizacji przedmiotu.", "error");
+                }
+            });
+        };
+
+        window.deleteSubject = async (subId) => {
+            const sub = state.subjects.find(s => s.id === subId);
+            if (!sub) return;
+            const ok = await showConfirm("Usunąć przedmiot?", `Czy na pewno chcesz usunąć przedmiot "${sub.name}"?`);
+            if (!ok) return;
+
+            try {
+                await deleteDoc(getDocRef('subjects', subId));
+                showToast("Przedmiot został usunięty.", "info");
+            } catch (err) {
+                showToast("Błąd usuwania przedmiotu.", "error");
+            }
+        };
+
+        // =========================================================================
+        // 12. PANEL ADMINISTRATORA: WYKŁADOWCY I UŻYTKOWNICY (SECONDARY APP)
+        // =========================================================================
+        window.toggleNewUserLecturerCheck = () => {
+            const role = document.getElementById('new-user-role').value;
+            const wrap = document.getElementById('new-user-is-lecturer-wrap');
+            if (role === 'admin') {
+                wrap.classList.remove('hidden');
+            } else {
+                wrap.classList.add('hidden');
+            }
+        };
+
+        document.getElementById('create-user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!isAdmin()) return;
+
+            const title = document.getElementById('new-user-title').value.trim();
+            const name = document.getElementById('new-user-name').value.trim();
+            const email = document.getElementById('new-user-email').value.trim();
+            const password = document.getElementById('new-user-password').value;
+            const role = document.getElementById('new-user-role').value;
+            const isLecturer = role === 'lecturer' ? true : document.getElementById('new-user-is-lecturer').checked;
+            const btn = document.getElementById('create-user-btn');
+
+            try {
+                btn.disabled = true;
+                btn.textContent = "Tworzenie konta...";
+
+                // Używamy secondaryAuth, aby NIE wylogować obecnego administratora!
+                const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+                const newUid = cred.user.uid;
+
+                // Zapis profilu nowego użytkownika w Firestore (z głównej sesji admina)
+                await setDoc(getDocRef('users', newUid), {
+                    uid: newUid,
+                    email,
+                    name,
+                    title,
+                    role,
+                    isLecturer,
+                    createdAt: new Date().toISOString()
+                });
+
+                // Wylogowujemy sesję w instancji pomocniczej
+                await signOut(secondaryAuth);
+
+                e.target.reset();
+                document.getElementById('new-user-title').value = 'dr';
+                toggleNewUserLecturerCheck();
+                showToast(`Utworzono konto dla: ${title} ${name}`, "success");
+            } catch (err) {
+                console.error(err);
+                let msg = "Nie udało się utworzyć konta.";
+                if (err.code === 'auth/email-already-in-use') msg = "Ten adres e-mail jest już zarejestrowany.";
+                if (err.code === 'auth/weak-password') msg = "Hasło jest za słabe (minimum 6 znaków).";
+                showToast(msg, "error");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Utwórz konto w Firebase";
+            }
+        });
+
+        function renderUsersTable() {
+            const tbody = document.getElementById('users-table-body');
+            if (!tbody) return;
+
+            if (state.users.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-8 px-4 text-center text-slate-400">Brak zarejestrowanych użytkowników.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = state.users.map(u => {
+                const isSelf = state.currentUser && u.uid === state.currentUser.uid;
+                let badges = u.role === 'admin'
+                    ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">Administrator</span>`
+                    : `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700">Wykładowca</span>`;
+
+                if (u.role === 'admin' && u.isLecturer) {
+                    badges += ` <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">+ Wykładowca</span>`;
+                }
+
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-3 px-4 font-medium text-slate-900">
+                            ${escapeHtml(u.title ? u.title + ' ' : '')}${escapeHtml(u.name)}
+                            ${isSelf ? '<span class="ml-1.5 text-[11px] text-indigo-600 font-semibold">(Ty)</span>' : ''}
+                        </td>
+                        <td class="py-3 px-4 text-slate-600 text-xs">${escapeHtml(u.email)}</td>
+                        <td class="py-3 px-4 whitespace-nowrap">${badges}</td>
+                        <td class="py-3 px-4 text-right whitespace-nowrap">
+                            <button onclick="openEditUserModal('${u.uid}')" class="p-1.5 text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition" title="Edytuj">
+                                <i class="ph ph-pencil-simple text-base"></i>
+                            </button>
+                            ${!isSelf ? `
+                                <button onclick="deleteUserProfile('${u.uid}')" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Usuń z listy">
+                                    <i class="ph ph-trash text-base"></i>
+                                </button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        window.openEditUserModal = (uid) => {
+            const u = state.users.find(x => x.uid === uid);
+            if (!u) return;
+
+            document.getElementById('admin-modal-title').textContent = "Edytuj dane użytkownika";
+            document.getElementById('admin-modal-body').innerHTML = `
+                <form id="edit-user-form" class="space-y-4">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Tytuł</label>
+                            <input type="text" id="edit-u-title" value="${escapeHtml(u.title || '')}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Imię i nazwisko *</label>
+                            <input type="text" id="edit-u-name" required value="${escapeHtml(u.name)}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Rola systemowa *</label>
+                        <select id="edit-u-role" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                            <option value="lecturer" ${u.role === 'lecturer' ? 'selected' : ''}>Wykładowca</option>
+                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrator</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                            <input type="checkbox" id="edit-u-is-lec" ${u.isLecturer || u.role === 'lecturer' ? 'checked' : ''} class="rounded border-slate-300 text-indigo-700">
+                            <span>Może prowadzić przedmioty (Wykładowca)</span>
+                        </label>
+                    </div>
+                    <div class="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                        <button type="button" onclick="closeAdminModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg">Anuluj</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-700 rounded-lg">Zapisz zmiany</button>
+                    </div>
+                </form>
+            `;
+            openAdminModal();
+
+            document.getElementById('edit-user-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newRole = document.getElementById('edit-u-role').value;
+                const newIsLec = newRole === 'lecturer' ? true : document.getElementById('edit-u-is-lec').checked;
+
+                try {
+                    await updateDoc(getDocRef('users', uid), {
+                        title: document.getElementById('edit-u-title').value.trim(),
+                        name: document.getElementById('edit-u-name').value.trim(),
+                        role: newRole,
+                        isLecturer: newIsLec
+                    });
+                    closeAdminModal();
+                    showToast("Zaktualizowano uprawnienia użytkownika.", "success");
+                } catch (err) {
+                    showToast("Błąd zapisu zmian.", "error");
+                }
+            });
+        };
+
+        window.deleteUserProfile = async (uid) => {
+            const u = state.users.find(x => x.uid === uid);
+            if (!u) return;
+            const ok = await showConfirm(
+                "Usunąć użytkownika z systemu?",
+                `Czy na pewno chcesz usunąć profil ${u.name} (${u.email}) z bazy danych dziennika?`
+            );
+            if (!ok) return;
+
+            try {
+                await deleteDoc(getDocRef('users', uid));
+                showToast("Profil użytkownika został usunięty.", "info");
+            } catch (err) {
+                showToast("Błąd podczas usuwania profilu.", "error");
+            }
+        };
+
+        window.openAdminModal = () => {
+            const m = document.getElementById('admin-edit-modal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        };
+
+        window.closeAdminModal = () => {
+            const m = document.getElementById('admin-edit-modal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        };
+    </script>
+</body>
+</html>
